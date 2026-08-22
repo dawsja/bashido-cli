@@ -147,4 +147,5 @@ func TestEditScript(t *testing.T) {
 				t.Errorf("patched = %v, want %v", patched, tc.wantPatch)
 			}
 		})
+	}
 }
