@@ -10,4 +10,4 @@
 - Human-readable metadata replaces terminal control characters. JSON and raw content remain unmodified.
 - Editors are launched directly, never through a shell. Temporary files use mode `0600`; conflicts preserve recovery content.
 
-Protect the account running `bashido`, its configuration directory, editor configuration, custom CA files, and server. Use `auth logout` to revoke a credential; use `--local-only` only when the server is unreachable and revoke separately later.
+Protect the account running `bashido`, its configuration directory, editor configuration, custom CA files, and server. Use `auth logout` to revoke one credential or `uninstall --yes` to revoke every saved credential and remove the CLI. Use `--local-only` only when a server is unreachable and revoke separately later.

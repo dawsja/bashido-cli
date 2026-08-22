@@ -5,6 +5,7 @@ All command data is written to stdout. Prompts, progress, and errors use stderr.
 ```text
 bashido
 bashido version
+bashido uninstall [--local-only] --yes
 bashido auth login [--no-browser] [--replace]
 bashido auth status
 bashido auth logout [--local-only]
@@ -31,4 +32,4 @@ bashido note clear REF --yes
 
 `script show` and `note show` emit stored content byte-for-byte unless `--json` is used. Updates and editor operations use the current revision; `--force` deliberately omits that check. On an editor conflict, the private recovery file path is reported.
 
-Logout and profile removal revoke the server credential before deleting local state. `--local-only` skips remote revocation. Permanent script deletion, note clearing, and profile removal require `--yes` where shown.
+Logout, profile removal, and uninstall revoke server credentials before deleting local state. Uninstall revokes credentials for every profile, removes Bashido's configuration files, and removes the running executable. `--local-only` skips remote revocation when the servers are unavailable. Permanent script deletion, note clearing, profile removal, and uninstall require `--yes` where shown.

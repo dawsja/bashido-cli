@@ -10,13 +10,14 @@ import (
 func testApp(t *testing.T) (*app, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	dir := t.TempDir()
+	executable := filepath.Join(dir, "bin", "bashido")
 	out, errOut := new(bytes.Buffer), new(bytes.Buffer)
 	a := &app{in: bytes.NewReader(nil), out: out, errOut: errOut, getenv: func(k string) string {
 		if k == "XDG_CONFIG_HOME" {
 			return dir
 		}
 		return ""
-	}}
+	}, executable: func() (string, error) { return executable, nil }}
 	return a, out, errOut
 }
 

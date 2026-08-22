@@ -22,6 +22,12 @@ bashido script show Deploy
 
 The first credentialless interactive run starts device linking. Profiles allow independent servers and credentials. See [docs/commands.md](docs/commands.md) for every command.
 
+To revoke every saved server credential and remove the CLI and its local configuration:
+
+```sh
+bashido uninstall --yes
+```
+
 ## Configuration
 
 Configuration is in `${XDG_CONFIG_HOME:-~/.config}/bashido/config.json`; credentials are in a separate `credentials.json`. Directories and files must be private (`0700` and `0600`). A custom CA can be assigned with `profile add --ca-file FILE`.

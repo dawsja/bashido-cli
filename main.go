@@ -27,16 +27,17 @@ func fail(code int, format string, args ...any) error {
 }
 
 type app struct {
-	in     io.Reader
-	out    io.Writer
-	errOut io.Writer
-	getenv func(string) string
+	in         io.Reader
+	out        io.Writer
+	errOut     io.Writer
+	getenv     func(string) string
+	executable func() (string, error)
 }
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	a := &app{in: os.Stdin, out: os.Stdout, errOut: os.Stderr, getenv: os.Getenv}
+	a := &app{in: os.Stdin, out: os.Stdout, errOut: os.Stderr, getenv: os.Getenv, executable: os.Executable}
 	if err := a.run(ctx, os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "bashido: %v\n", err)
 		var ee *exitError
