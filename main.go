@@ -27,11 +27,12 @@ func fail(code int, format string, args ...any) error {
 }
 
 type app struct {
-	in         io.Reader
-	out        io.Writer
-	errOut     io.Writer
-	getenv     func(string) string
-	executable func() (string, error)
+	in          io.Reader
+	out         io.Writer
+	errOut      io.Writer
+	getenv      func(string) string
+	executable  func() (string, error)
+	releaseBase string
 }
 
 func main() {

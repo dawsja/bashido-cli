@@ -19,6 +19,7 @@ Commands:
   script     List, search, create, edit, and remove scripts
   note       Show, set, edit, and clear script notes
   uninstall Revoke credentials and remove bashido
+  upgrade   Install the latest bashido release
   version    Print the version
 
 Run 'bashido <command> --help' for command details.`
@@ -91,6 +92,8 @@ func (a *app) run(ctx context.Context, args []string) error {
 		return a.noteCommand(ctx, args[1:])
 	case "uninstall":
 		return a.uninstall(ctx, args[1:])
+	case "upgrade":
+		return a.upgrade(ctx, args[1:])
 	default:
 		return fail(2, "unknown command %q", args[0])
 	}

@@ -22,6 +22,12 @@ bashido script show Deploy
 
 The first credentialless interactive run starts device linking. Profiles allow independent servers and credentials. See [docs/commands.md](docs/commands.md) for every command.
 
+Upgrade to the latest checksum-verified release without changing local configuration:
+
+```sh
+bashido upgrade
+```
+
 To revoke every saved server credential and remove the CLI and its local configuration:
 
 ```sh

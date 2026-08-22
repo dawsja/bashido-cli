@@ -25,7 +25,7 @@ func (a *app) uninstall(ctx context.Context, args []string) error {
 		return fail(2, "uninstall requires --yes")
 	}
 
-	executable, err := a.uninstallExecutable()
+	executable, err := a.managedExecutable()
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (a *app) uninstall(ctx context.Context, args []string) error {
 	return nil
 }
 
-func (a *app) uninstallExecutable() (string, error) {
+func (a *app) managedExecutable() (string, error) {
 	if a.executable == nil {
 		return "", errors.New("cannot locate the bashido executable")
 	}
@@ -112,7 +112,7 @@ func (a *app) uninstallExecutable() (string, error) {
 	if !fi.Mode().IsRegular() && fi.Mode()&os.ModeSymlink == 0 {
 		return "", errors.New("refusing to remove an executable that is not a regular file or symlink")
 	}
-	probe, err := os.CreateTemp(filepath.Dir(path), ".bashido-uninstall-")
+	probe, err := os.CreateTemp(filepath.Dir(path), ".bashido-write-")
 	if err != nil {
 		return "", fmt.Errorf("executable directory is not writable: %w", err)
 	}
