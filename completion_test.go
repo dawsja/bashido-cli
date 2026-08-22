@@ -22,7 +22,7 @@ func TestBashCompletionScript(t *testing.T) {
 	if out.String() != bashCompletion {
 		t.Fatal("completion command did not emit the Bash completion script")
 	}
-	for _, required := range []string{"complete -F _bashido bashido", "__complete scripts", "__complete profiles", "script:restore|script:purge", "note:show|note:set|note:edit|note:clear", "--ca-file=*|--notes-file=*"} {
+	for _, required := range []string{"complete -F _bashido bashido", "__complete scripts", "__complete profiles", "script:restore|script:purge", "note:show|note:set|note:edit|note:clear", "--ca-file=*|--notes-file=*", "compopt -o filenames 2>/dev/null || true"} {
 		if !strings.Contains(out.String(), required) {
 			t.Errorf("completion script missing %q", required)
 		}

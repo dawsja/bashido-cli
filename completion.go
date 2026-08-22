@@ -123,6 +123,7 @@ const bashCompletion = `_bashido() {
         ;;
     esac
     if [[ -n ${state-} ]]; then
+      compopt -o filenames 2>/dev/null || true
       while IFS= read -r candidate; do
         [[ $candidate == "$cur"* ]] && COMPREPLY+=("$candidate")
       done < <("${COMP_WORDS[0]}" __complete scripts "$state" "$cur" 2>/dev/null)
