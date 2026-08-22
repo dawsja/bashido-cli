@@ -164,6 +164,8 @@ func TestLoginFlowSavesOnlyAccessToken(t *testing.T) {
 	defer ts.Close()
 	origin = ts.URL
 	a, out, errOut := testApp(t)
+	a.in = strings.NewReader("n\n")
+	a.isInteractive = func() bool { return true }
 	cfg, creds, dir, err := a.load()
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +194,9 @@ func TestLoginFlowSavesOnlyAccessToken(t *testing.T) {
 	}
 	if strings.Contains(log, "private-device-code") || strings.Contains(log, "private-access-token") {
 		t.Fatalf("secret leaked: %q", log)
+	}
+	if !strings.Contains(log, "Set up Bash tab completion? [y/N]") {
+		t.Fatalf("completion setup was not offered: %q", log)
 	}
 	if got := out.String(); got != "Logged in to "+origin+" as profile \"p\".\n" {
 		t.Fatalf("completion output = %q", got)

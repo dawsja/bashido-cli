@@ -10,6 +10,8 @@ curl -fsSL https://bashido.example.com/install.sh | sh
 
 The server-provided installer configures that Bashido instance automatically. It downloads the matching release asset and verifies it against `checksums.txt`. It installs to `~/.local/bin`, or `/usr/local/bin` when run as root. It does not use `sudo` or edit shell startup files.
 
+Enable Bash tab completion for the current shell with `source <(bashido completion bash)`. After initial authentication, Bashido asks once in an interactive terminal whether to add that command to `~/.bashrc`; an initial non-interactive login defers the offer until the next interactive no-argument run.
+
 ## Start
 
 ```sh

@@ -128,7 +128,8 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if c, ok := creds.Profiles[name]; ok && c.Token != "" && !*replace {
+	c, hasCredential := creds.Profiles[name]
+	if hasCredential && c.Token != "" && !*replace {
 		return fail(2, "profile %q already has a credential; use --replace", name)
 	}
 	cl, err := newClient(p, "")
@@ -167,8 +168,13 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 	if err = saveCredentials(dir, creds); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(a.out, "Logged in to %s as profile %q.\n", sanitize(p.Origin), sanitize(name))
-	return err
+	if _, err = fmt.Fprintf(a.out, "Logged in to %s as profile %q.\n", sanitize(p.Origin), sanitize(name)); err != nil {
+		return err
+	}
+	if !cfg.CompletionOffered {
+		return a.offerBashCompletion(dir)
+	}
+	return nil
 }
 
 func safeDeviceName(value string) string {

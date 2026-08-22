@@ -26,8 +26,9 @@ type profile struct {
 }
 
 type config struct {
-	Current  string             `json:"current,omitempty"`
-	Profiles map[string]profile `json:"profiles"`
+	Current           string             `json:"current,omitempty"`
+	Profiles          map[string]profile `json:"profiles"`
+	CompletionOffered bool               `json:"completionOffered,omitempty"`
 }
 
 type credential struct {

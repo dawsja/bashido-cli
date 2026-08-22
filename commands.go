@@ -18,6 +18,7 @@ Commands:
   profile    Manage named server profiles
   script     List, search, create, edit, and remove scripts
   note       Show, set, edit, and clear script notes
+  completion Generate shell completion
   uninstall Revoke credentials and remove bashido
   upgrade   Install the latest bashido release
   version    Print the version
@@ -55,7 +56,7 @@ func optionsFirst(args []string, values map[string]bool) []string {
 
 func (a *app) run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		cfg, creds, _, err := a.load()
+		cfg, creds, dir, err := a.load()
 		if err != nil {
 			return err
 		}
@@ -66,6 +67,11 @@ func (a *app) run(ctx context.Context, args []string) error {
 		}
 		if c, ok := creds.Profiles[name]; !ok || c.Token == "" || c.Origin != p.Origin {
 			return a.authLogin(ctx, nil)
+		}
+		if !cfg.CompletionOffered {
+			if err = a.offerBashCompletion(dir); err != nil {
+				return err
+			}
 		}
 		fmt.Fprintf(a.out, "Profile: %s\nServer:  %s\n", name, p.Origin)
 		fmt.Fprintln(a.errOut, "Run 'bashido --help' for commands.")
@@ -90,6 +96,10 @@ func (a *app) run(ctx context.Context, args []string) error {
 		return a.scriptCommand(ctx, args[1:])
 	case "note":
 		return a.noteCommand(ctx, args[1:])
+	case "completion":
+		return a.completionCommand(args[1:])
+	case "__complete":
+		return a.completionCandidates(ctx, args[1:])
 	case "uninstall":
 		return a.uninstall(ctx, args[1:])
 	case "upgrade":
