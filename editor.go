@@ -139,8 +139,12 @@ func (a *app) editScript(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	var out script
-	_, err = cl.do(ctx, "PATCH", "/api/v1/scripts/"+url.PathEscape(s.ID), map[string]string{"content": content}, &out, revisionHeader(s.Revision, *force))
+	if content == s.Content {
+		_ = os.Remove(recovery)
+		return nil
+	}
+	var response scriptEnvelope
+	_, err = cl.do(ctx, "PATCH", "/api/v1/scripts/"+url.PathEscape(s.ID), map[string]string{"content": content}, &response, revisionHeader(s.Revision, *force))
 	if err != nil {
 		if isAPIStatus(err, 409) || isAPIStatus(err, 412) {
 			return fmt.Errorf("revision conflict; edited content preserved at %s", filepath.Clean(recovery))
