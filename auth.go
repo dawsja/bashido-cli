@@ -76,9 +76,11 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 		}
 		c, ok := creds.Profiles[name]
 		if !ok {
-			return nil
+			_, err = fmt.Fprintf(a.out, "Already logged out of profile %q.\n", sanitize(name))
+			return err
 		}
-		if !*local {
+		revoked := false
+		if !*local && c.Origin == p.Origin && c.Token != "" {
 			cl, e := newClient(p, c.Token)
 			if e != nil {
 				return e
@@ -86,9 +88,23 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 			if _, e = cl.do(ctx, "DELETE", "/api/v1/me/credential", nil, nil, nil); e != nil {
 				return fmt.Errorf("revoke credential (local credential retained): %w", e)
 			}
+			revoked = true
 		}
 		delete(creds.Profiles, name)
-		return saveCredentials(dir, creds)
+		if err = saveCredentials(dir, creds); err != nil {
+			return err
+		}
+		if revoked {
+			_, err = fmt.Fprintf(a.out, "Logged out of profile %q and revoked its credential.\n", sanitize(name))
+			return err
+		}
+		if c.Token != "" {
+			if _, err = fmt.Fprintln(a.errOut, "Warning: the server credential was not revoked."); err != nil {
+				return err
+			}
+		}
+		_, err = fmt.Fprintf(a.out, "Removed the local credential for profile %q.\n", sanitize(name))
+		return err
 	default:
 		return fail(2, "unknown auth command %q", args[0])
 	}
@@ -151,8 +167,8 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 	if err = saveCredentials(dir, creds); err != nil {
 		return err
 	}
-	fmt.Fprintf(a.errOut, "Logged in to %s as profile %s.\n", p.Origin, name)
-	return nil
+	_, err = fmt.Fprintf(a.out, "Logged in to %s as profile %q.\n", sanitize(p.Origin), sanitize(name))
+	return err
 }
 
 func safeDeviceName(value string) string {

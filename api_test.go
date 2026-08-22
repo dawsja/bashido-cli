@@ -163,7 +163,7 @@ func TestLoginFlowSavesOnlyAccessToken(t *testing.T) {
 	}))
 	defer ts.Close()
 	origin = ts.URL
-	a, _, errOut := testApp(t)
+	a, out, errOut := testApp(t)
 	cfg, creds, dir, err := a.load()
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +192,12 @@ func TestLoginFlowSavesOnlyAccessToken(t *testing.T) {
 	}
 	if strings.Contains(log, "private-device-code") || strings.Contains(log, "private-access-token") {
 		t.Fatalf("secret leaked: %q", log)
+	}
+	if got := out.String(); got != "Logged in to "+origin+" as profile \"p\".\n" {
+		t.Fatalf("completion output = %q", got)
+	}
+	if strings.Contains(log, "Logged in") {
+		t.Fatalf("completion written to stderr: %q", log)
 	}
 	_ = creds
 }

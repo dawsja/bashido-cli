@@ -205,8 +205,14 @@ func (a *app) createScript(ctx context.Context, args []string) error {
 	if _, err = cl.do(ctx, "POST", "/api/v1/scripts", body, &response, nil); err != nil {
 		return err
 	}
-	fmt.Fprintln(a.out, response.Script.ID)
-	return nil
+	if response.Script.ID == "" {
+		return errors.New("create response missing script ID")
+	}
+	if response.Script.Title == "" {
+		return errors.New("create response missing script title")
+	}
+	_, err = fmt.Fprintf(a.out, "Created script %q (%s).\n", sanitize(response.Script.Title), sanitize(response.Script.ID))
+	return err
 }
 
 func (a *app) updateScript(ctx context.Context, args []string) error {
@@ -243,8 +249,14 @@ func (a *app) updateScript(ctx context.Context, args []string) error {
 	if _, err = cl.do(ctx, "PATCH", "/api/v1/scripts/"+url.PathEscape(s.ID), body, &response, headers); err != nil {
 		return err
 	}
-	fmt.Fprintln(a.out, response.Script.ID)
-	return nil
+	if response.Script.ID == "" {
+		return errors.New("update response missing script ID")
+	}
+	if response.Script.Title == "" {
+		return errors.New("update response missing script title")
+	}
+	_, err = fmt.Fprintf(a.out, "Updated script %q (%s).\n", sanitize(response.Script.Title), sanitize(response.Script.ID))
+	return err
 }
 
 func (a *app) mutateScript(ctx context.Context, cmd string, args []string) error {
@@ -269,14 +281,20 @@ func (a *app) mutateScript(ctx context.Context, cmd string, args []string) error
 	}
 	path := "/api/v1/scripts/" + url.PathEscape(s.ID)
 	method := "DELETE"
+	action := "Deleted"
 	if cmd == "restore" {
 		method = "POST"
 		path += "/restore"
+		action = "Restored"
 	}
 	if cmd == "purge" {
 		path += "/permanent"
+		action = "Permanently deleted"
 	}
-	_, err = cl.do(ctx, method, path, nil, nil, nil)
+	if _, err = cl.do(ctx, method, path, nil, nil, nil); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(a.out, "%s script %q (%s).\n", action, sanitize(s.Title), sanitize(s.ID))
 	return err
 }
 

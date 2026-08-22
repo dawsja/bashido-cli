@@ -49,9 +49,24 @@ func TestProfileAddFlagsAfterArguments(t *testing.T) {
 	if err := a.run(t.Context(), []string{"profile", "add", "work", "https://example.com", "--use"}); err != nil {
 		t.Fatal(err)
 	}
+	if got := out.String(); got != "Added and selected profile \"work\" (https://example.com).\n" {
+		t.Fatalf("profile add output = %q", got)
+	}
+	out.Reset()
 	if err := a.run(t.Context(), []string{"profile", "add", "work", "https://example.com", "--use"}); err != nil {
 		t.Fatalf("idempotent profile add: %v", err)
 	}
+	if got := out.String(); got != "Profile \"work\" already exists with these settings and is already selected.\n" {
+		t.Fatalf("idempotent profile add output = %q", got)
+	}
+	out.Reset()
+	if err := a.run(t.Context(), []string{"profile", "use", "work"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Already using profile \"work\".\n" {
+		t.Fatalf("profile use output = %q", got)
+	}
+	out.Reset()
 	if err := a.run(t.Context(), []string{"profile", "list"}); err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +85,34 @@ func TestProfileAddFlagsAfterArguments(t *testing.T) {
 	}
 	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0700 {
 		t.Fatalf("dir mode = %o", fi.Mode().Perm())
+	}
+}
+
+func TestProfileAddAndUseAcknowledgements(t *testing.T) {
+	a, out, _ := testApp(t)
+	if err := a.run(t.Context(), []string{"profile", "add", "work", "https://work.example"}); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := a.run(t.Context(), []string{"profile", "add", "personal", "https://personal.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Added profile \"personal\" (https://personal.example).\n" {
+		t.Fatalf("profile add output = %q", got)
+	}
+	out.Reset()
+	if err := a.run(t.Context(), []string{"profile", "use", "personal"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Now using profile \"personal\".\n" {
+		t.Fatalf("profile use output = %q", got)
+	}
+	out.Reset()
+	if err := a.run(t.Context(), []string{"profile", "add", "work", "https://work.example", "--use"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Profile \"work\" already exists; now using it.\n" {
+		t.Fatalf("existing profile selection output = %q", got)
 	}
 }
 

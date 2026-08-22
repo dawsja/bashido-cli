@@ -162,16 +162,34 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 				return fail(2, "profile %q already exists with different settings", name)
 			}
 			if *use {
+				if cfg.Current == name {
+					_, err = fmt.Fprintf(a.out, "Profile %q already exists with these settings and is already selected.\n", sanitize(name))
+					return err
+				}
 				cfg.Current = name
-				return saveConfig(dir, cfg)
+				if err = saveConfig(dir, cfg); err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(a.out, "Profile %q already exists; now using it.\n", sanitize(name))
+				return err
 			}
-			return nil
+			_, err = fmt.Fprintf(a.out, "Profile %q already exists with these settings.\n", sanitize(name))
+			return err
 		}
 		cfg.Profiles[name] = profile{Origin: origin, CAFile: *ca}
-		if *use || cfg.Current == "" {
+		selected := *use || cfg.Current == ""
+		if selected {
 			cfg.Current = name
 		}
-		return saveConfig(dir, cfg)
+		if err = saveConfig(dir, cfg); err != nil {
+			return err
+		}
+		if selected {
+			_, err = fmt.Fprintf(a.out, "Added and selected profile %q (%s).\n", sanitize(name), sanitize(origin))
+		} else {
+			_, err = fmt.Fprintf(a.out, "Added profile %q (%s).\n", sanitize(name), sanitize(origin))
+		}
+		return err
 	case "use":
 		if len(args) != 2 {
 			return fail(2, "usage: bashido profile use NAME")
@@ -179,8 +197,16 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		if _, ok := cfg.Profiles[args[1]]; !ok {
 			return fail(2, "profile %q does not exist", args[1])
 		}
+		if cfg.Current == args[1] {
+			_, err = fmt.Fprintf(a.out, "Already using profile %q.\n", sanitize(args[1]))
+			return err
+		}
 		cfg.Current = args[1]
-		return saveConfig(dir, cfg)
+		if err = saveConfig(dir, cfg); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(a.out, "Now using profile %q.\n", sanitize(args[1]))
+		return err
 	case "remove":
 		f := a.flags("profile remove")
 		local := f.Bool("local-only", false, "do not revoke remotely")
@@ -199,8 +225,11 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		if !ok {
 			return fail(2, "profile %q does not exist", name)
 		}
+		c, hadCredential := creds.Profiles[name]
+		revoked := false
+		wasCurrent := cfg.Current == name
 		if !*local {
-			if c, ok := creds.Profiles[name]; ok && c.Origin == p.Origin && c.Token != "" {
+			if hadCredential && c.Origin == p.Origin && c.Token != "" {
 				cl, e := newClient(p, c.Token)
 				if e != nil {
 					return e
@@ -208,6 +237,7 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 				if _, e = cl.do(ctx, "DELETE", "/api/v1/me/credential", nil, nil, nil); e != nil {
 					return fmt.Errorf("revoke credential (profile retained): %w", e)
 				}
+				revoked = true
 			}
 		}
 		delete(cfg.Profiles, name)
@@ -226,7 +256,30 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		if err := saveCredentials(dir, creds); err != nil {
 			return err
 		}
-		return saveConfig(dir, cfg)
+		if err := saveConfig(dir, cfg); err != nil {
+			return err
+		}
+		if revoked {
+			_, err = fmt.Fprintf(a.out, "Removed profile %q and revoked its credential.\n", sanitize(name))
+		} else if hadCredential {
+			if c.Token != "" {
+				if _, err = fmt.Fprintln(a.errOut, "Warning: the server credential was not revoked."); err != nil {
+					return err
+				}
+			}
+			_, err = fmt.Fprintf(a.out, "Removed profile %q and its local credential.\n", sanitize(name))
+		} else {
+			_, err = fmt.Fprintf(a.out, "Removed profile %q.\n", sanitize(name))
+		}
+		if err != nil || !wasCurrent {
+			return err
+		}
+		if cfg.Current == "" {
+			_, err = fmt.Fprintln(a.out, "No current profile is selected.")
+		} else {
+			_, err = fmt.Fprintf(a.out, "Current profile is now %q.\n", sanitize(cfg.Current))
+		}
+		return err
 	default:
 		return fail(2, "unknown profile command %q", args[0])
 	}
