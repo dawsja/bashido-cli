@@ -1,0 +1,43 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Verify
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+      - name: Build
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o bashido-linux-amd64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o bashido-linux-arm64 .
+          cp scripts/install.sh install.sh
+          sha256sum bashido-linux-amd64 bashido-linux-arm64 install.sh > checksums.txt
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            bashido-linux-amd64
+            bashido-linux-arm64
+            checksums.txt
+            install.sh
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bashido-linux-amd64
+            bashido-linux-arm64
+            checksums.txt
+            install.sh
+          generate_release_notes: true
