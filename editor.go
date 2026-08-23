@@ -154,7 +154,7 @@ func (a *app) editScript(ctx context.Context, args []string) error {
 		return err
 	}
 	_ = os.Remove(recovery)
-	_, err = fmt.Fprintf(a.out, "Updated script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
+	_, err = a.successf("Updated script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
 	return err
 }
 
@@ -204,7 +204,7 @@ func (a *app) noteCommand(ctx context.Context, args []string) error {
 		if _, e = cl.do(ctx, "PUT", "/api/v1/scripts/"+url.PathEscape(s.ID)+"/notes", map[string]string{"notes": v}, nil, revisionHeader(s.Revision, false)); e != nil {
 			return e
 		}
-		_, e = fmt.Fprintf(a.out, "Updated notes for script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
+		_, e = a.successf("Updated notes for script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
 		return e
 	case "edit":
 		f := a.flags("note edit")
@@ -241,7 +241,7 @@ func (a *app) noteCommand(ctx context.Context, args []string) error {
 			return e
 		}
 		_ = os.Remove(recovery)
-		_, e = fmt.Fprintf(a.out, "Updated notes for script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
+		_, e = a.successf("Updated notes for script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
 		return e
 	case "clear":
 		f := a.flags("note clear")
@@ -259,7 +259,7 @@ func (a *app) noteCommand(ctx context.Context, args []string) error {
 		if _, e = cl.do(ctx, "DELETE", "/api/v1/scripts/"+url.PathEscape(s.ID)+"/notes", nil, nil, revisionHeader(s.Revision, false)); e != nil {
 			return e
 		}
-		_, e = fmt.Fprintf(a.out, "Cleared notes for script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
+		_, e = a.successf("Cleared notes for script %q (%s).\n", sanitize(s.Title), sanitize(s.ID))
 		return e
 	default:
 		return fail(2, "unknown note command %q", args[0])

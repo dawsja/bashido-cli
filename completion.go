@@ -165,11 +165,11 @@ func (a *app) offerBashCompletion(dir string) error {
 	}
 	latest, _, loadedDir, err := a.load()
 	if err != nil {
-		_, _ = fmt.Fprintf(a.errOut, "Warning: could not check autocomplete preference: %s\n", sanitize(err.Error()))
+		_, _ = a.warningf("Warning: could not check autocomplete preference: %s\n", sanitize(err.Error()))
 		return nil
 	}
 	if loadedDir != dir {
-		_, _ = fmt.Fprintln(a.errOut, "Warning: configuration directory changed; autocomplete setup was skipped.")
+		_, _ = a.warningf("Warning: configuration directory changed; autocomplete setup was skipped.\n")
 		return nil
 	}
 	if latest.CompletionOffered {
@@ -190,15 +190,15 @@ func (a *app) offerBashCompletion(dir string) error {
 		switch strings.ToLower(strings.TrimSpace(line)) {
 		case "y", "yes":
 			if saveErr := a.markCompletionOffered(dir); saveErr != nil {
-				_, _ = fmt.Fprintf(a.errOut, "Warning: could not save autocomplete preference: %s\n", sanitize(saveErr.Error()))
+				_, _ = a.warningf("Warning: could not save autocomplete preference: %s\n", sanitize(saveErr.Error()))
 			}
 			if installErr := a.installBashCompletion(); installErr != nil {
-				_, _ = fmt.Fprintf(a.errOut, "Warning: could not enable Bash completion: %s\nRun 'bashido completion install' to retry.\n", sanitize(installErr.Error()))
+				_, _ = a.warningf("Warning: could not enable Bash completion: %s\nRun 'bashido completion install' to retry.\n", sanitize(installErr.Error()))
 			}
 			return nil
 		case "", "n", "no":
 			if saveErr := a.markCompletionOffered(dir); saveErr != nil {
-				_, _ = fmt.Fprintf(a.errOut, "Warning: could not save autocomplete preference: %s\n", sanitize(saveErr.Error()))
+				_, _ = a.warningf("Warning: could not save autocomplete preference: %s\n", sanitize(saveErr.Error()))
 			}
 			return nil
 		default:
@@ -224,8 +224,8 @@ func (a *app) markCompletionOffered(dir string) error {
 	return saveConfig(dir, cfg)
 }
 
-func isTerminal(r io.Reader) bool {
-	f, ok := r.(*os.File)
+func isTerminal(stream any) bool {
+	f, ok := stream.(*os.File)
 	if !ok {
 		return false
 	}
@@ -267,7 +267,7 @@ func (a *app) installBashCompletion() error {
 	if err = f.Close(); err != nil {
 		return fmt.Errorf("close %s: %w", path, err)
 	}
-	_, err = fmt.Fprintf(a.out, "Enabled Bash completion in %s; open a new shell to use it.\n", sanitize(path))
+	_, err = a.successf("Enabled Bash completion in %s; open a new shell to use it.\n", sanitize(path))
 	return err
 }
 

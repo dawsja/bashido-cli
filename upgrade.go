@@ -88,7 +88,7 @@ func (a *app) upgrade(ctx context.Context, args []string) error {
 	if err = os.Rename(tmpName, executable); err != nil {
 		return fmt.Errorf("replace executable: %w", err)
 	}
-	fmt.Fprintln(a.out, "Upgraded bashido to the latest release.")
+	a.successf("Upgraded bashido to the latest release.\n")
 	return nil
 }
 

@@ -82,11 +82,11 @@ func (a *app) uninstall(ctx context.Context, args []string) error {
 	}
 
 	if *local {
-		fmt.Fprintln(a.errOut, "Warning: server credentials were not revoked.")
+		a.warningf("Warning: server credentials were not revoked.\n")
 	} else {
-		fmt.Fprintf(a.out, "Revoked %d credential(s).\n", revoked)
+		a.successf("Revoked %d credential(s).\n", revoked)
 	}
-	fmt.Fprintf(a.out, "Removed %s.\n", executable)
+	a.successf("Removed %s.\n", executable)
 	return nil
 }
 

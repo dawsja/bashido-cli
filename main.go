@@ -32,6 +32,7 @@ type app struct {
 	errOut        io.Writer
 	getenv        func(string) string
 	isInteractive func() bool
+	useColor      func(io.Writer) bool
 	executable    func() (string, error)
 	releaseBase   string
 }
@@ -40,8 +41,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	a := &app{in: os.Stdin, out: os.Stdout, errOut: os.Stderr, getenv: os.Getenv, executable: os.Executable}
+	a.useColor = func(w io.Writer) bool { return terminalColor(w, os.Getenv) }
 	if err := a.run(ctx, os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "bashido: %v\n", err)
+		fmt.Fprint(os.Stderr, a.paint(os.Stderr, ansiRed+ansiBold, fmt.Sprintf("bashido: %v\n", err)))
 		var ee *exitError
 		if errors.As(err, &ee) {
 			os.Exit(ee.code)

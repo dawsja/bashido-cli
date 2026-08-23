@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
+	"text/tabwriter"
 )
 
 func TestSanitizeAndRawInput(t *testing.T) {
@@ -27,6 +30,55 @@ func TestSanitizeAndRawInput(t *testing.T) {
 	}
 	if b.String() != "{\"content\":\"<x>\"}\n" {
 		t.Fatalf("JSON = %q", b.String())
+	}
+}
+
+func TestColorOutput(t *testing.T) {
+	a, out, errOut := testApp(t)
+	a.useColor = func(io.Writer) bool { return true }
+
+	if _, err := a.successf("Created %q.\n", "Deploy"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "\x1b[32mCreated \"Deploy\".\x1b[0m\n"; got != want {
+		t.Fatalf("colored success = %q, want %q", got, want)
+	}
+	if _, err := a.warningf("Warning: unavailable.\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := errOut.String(), "\x1b[33mWarning: unavailable.\x1b[0m\n"; got != want {
+		t.Fatalf("colored warning = %q, want %q", got, want)
+	}
+	if help := a.help(out); !strings.Contains(help, "\x1b[1mUsage:\x1b[0m") || !strings.Contains(help, "\x1b[36mscript\x1b[0m") {
+		t.Fatalf("colored help missing styles: %q", help)
+	}
+}
+
+func TestColorDisabledByDefault(t *testing.T) {
+	a, out, _ := testApp(t)
+	if _, err := a.successf("Created.\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Created.\n" {
+		t.Fatalf("redirected output = %q", got)
+	}
+}
+
+func TestTableColorPreservesAlignment(t *testing.T) {
+	a, _, _ := testApp(t)
+	a.useColor = func(io.Writer) bool { return true }
+	var colored bytes.Buffer
+	w := tabwriter.NewWriter(&colored, 0, 4, 2, ' ', tabwriter.StripEscape)
+	fmt.Fprintf(w, "%s\tTITLE\n%s\tDeploy\n", a.tablePaint(&colored, ansiBold, "ID"), a.tablePaint(&colored, ansiCyan, "abc"))
+	if err := w.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	plain := strings.NewReplacer(ansiBold, "", ansiCyan, "", ansiReset, "").Replace(colored.String())
+	if want := "ID    TITLE\nabc  Deploy\n"; plain != want {
+		t.Fatalf("table without color = %q, want %q", plain, want)
+	}
+	if strings.ContainsRune(colored.String(), tabwriter.Escape) {
+		t.Fatalf("table output contains tabwriter escape: %q", colored.String())
 	}
 }
 

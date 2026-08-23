@@ -122,14 +122,18 @@ func (a *app) listScripts(ctx context.Context, cmd string, args []string) error 
 	if *asJSON {
 		return writeJSON(a.out, rows)
 	}
-	w := tabwriter.NewWriter(a.out, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tTITLE\tUPDATED\tSTATE")
+	w := tabwriter.NewWriter(a.out, 0, 4, 2, ' ', tabwriter.StripEscape)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.tablePaint(a.out, ansiBold, "ID"), a.tablePaint(a.out, ansiBold, "TITLE"), a.tablePaint(a.out, ansiBold, "UPDATED"), a.tablePaint(a.out, ansiBold, "STATE"))
 	for _, s := range rows {
 		st := "active"
 		if s.DeletedAt != nil {
 			st = "trash"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", sanitize(s.ID), sanitize(s.Title), formatMillis(s.UpdatedAt), st)
+		stateColor := ansiGreen
+		if st == "trash" {
+			stateColor = ansiRed
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.tablePaint(a.out, ansiCyan, sanitize(s.ID)), sanitize(s.Title), a.tablePaint(a.out, ansiDim, formatMillis(s.UpdatedAt)), a.tablePaint(a.out, stateColor, st))
 	}
 	return w.Flush()
 }
@@ -211,7 +215,7 @@ func (a *app) createScript(ctx context.Context, args []string) error {
 	if response.Script.Title == "" {
 		return errors.New("create response missing script title")
 	}
-	_, err = fmt.Fprintf(a.out, "Created script %q (%s).\n", sanitize(response.Script.Title), sanitize(response.Script.ID))
+	_, err = a.successf("Created script %q (%s).\n", sanitize(response.Script.Title), sanitize(response.Script.ID))
 	return err
 }
 
@@ -255,7 +259,7 @@ func (a *app) updateScript(ctx context.Context, args []string) error {
 	if response.Script.Title == "" {
 		return errors.New("update response missing script title")
 	}
-	_, err = fmt.Fprintf(a.out, "Updated script %q (%s).\n", sanitize(response.Script.Title), sanitize(response.Script.ID))
+	_, err = a.successf("Updated script %q (%s).\n", sanitize(response.Script.Title), sanitize(response.Script.ID))
 	return err
 }
 
@@ -294,7 +298,7 @@ func (a *app) mutateScript(ctx context.Context, cmd string, args []string) error
 	if _, err = cl.do(ctx, method, path, nil, nil, nil); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(a.out, "%s script %q (%s).\n", action, sanitize(s.Title), sanitize(s.ID))
+	_, err = a.successf("%s script %q (%s).\n", action, sanitize(s.Title), sanitize(s.ID))
 	return err
 }
 

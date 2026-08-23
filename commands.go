@@ -28,7 +28,7 @@ Run 'bashido <command> --help' for command details.`
 func (a *app) flags(name string) *flag.FlagSet {
 	f := flag.NewFlagSet(name, flag.ContinueOnError)
 	f.SetOutput(a.errOut)
-	f.Usage = func() { fmt.Fprintln(a.errOut, shortHelp) }
+	f.Usage = func() { fmt.Fprintln(a.errOut, a.help(a.errOut)) }
 	return f
 }
 
@@ -62,7 +62,7 @@ func (a *app) run(ctx context.Context, args []string) error {
 		}
 		name, p, err := active(cfg)
 		if err != nil {
-			fmt.Fprintln(a.errOut, shortHelp)
+			fmt.Fprintln(a.errOut, a.help(a.errOut))
 			return nil
 		}
 		if c, ok := creds.Profiles[name]; !ok || c.Token == "" || c.Origin != p.Origin {
@@ -73,12 +73,12 @@ func (a *app) run(ctx context.Context, args []string) error {
 				return err
 			}
 		}
-		fmt.Fprintf(a.out, "Profile: %s\nServer:  %s\n", name, p.Origin)
-		fmt.Fprintln(a.errOut, "Run 'bashido --help' for commands.")
+		fmt.Fprintf(a.out, "%s %s\n%s  %s\n", a.paint(a.out, ansiBold, "Profile:"), sanitize(name), a.paint(a.out, ansiBold, "Server:"), sanitize(p.Origin))
+		fmt.Fprintln(a.errOut, a.paint(a.errOut, ansiDim, "Run 'bashido --help' for commands."))
 		return nil
 	}
 	if args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
-		fmt.Fprintln(a.out, shortHelp)
+		fmt.Fprintln(a.out, a.help(a.out))
 		return nil
 	}
 	switch args[0] {
@@ -130,7 +130,7 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		for _, n := range names {
 			mark := " "
 			if n == cfg.Current {
-				mark = "*"
+				mark = a.paint(a.out, ansiGreen+ansiBold, "*")
 			}
 			fmt.Fprintf(a.out, "%s %-16s %s\n", mark, sanitize(n), sanitize(cfg.Profiles[n].Origin))
 		}
@@ -180,7 +180,7 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 				if err = saveConfig(dir, cfg); err != nil {
 					return err
 				}
-				_, err = fmt.Fprintf(a.out, "Profile %q already exists; now using it.\n", sanitize(name))
+				_, err = a.successf("Profile %q already exists; now using it.\n", sanitize(name))
 				return err
 			}
 			_, err = fmt.Fprintf(a.out, "Profile %q already exists with these settings.\n", sanitize(name))
@@ -195,9 +195,9 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 			return err
 		}
 		if selected {
-			_, err = fmt.Fprintf(a.out, "Added and selected profile %q (%s).\n", sanitize(name), sanitize(origin))
+			_, err = a.successf("Added and selected profile %q (%s).\n", sanitize(name), sanitize(origin))
 		} else {
-			_, err = fmt.Fprintf(a.out, "Added profile %q (%s).\n", sanitize(name), sanitize(origin))
+			_, err = a.successf("Added profile %q (%s).\n", sanitize(name), sanitize(origin))
 		}
 		return err
 	case "use":
@@ -215,7 +215,7 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		if err = saveConfig(dir, cfg); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(a.out, "Now using profile %q.\n", sanitize(args[1]))
+		_, err = a.successf("Now using profile %q.\n", sanitize(args[1]))
 		return err
 	case "remove":
 		f := a.flags("profile remove")
@@ -270,16 +270,16 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 			return err
 		}
 		if revoked {
-			_, err = fmt.Fprintf(a.out, "Removed profile %q and revoked its credential.\n", sanitize(name))
+			_, err = a.successf("Removed profile %q and revoked its credential.\n", sanitize(name))
 		} else if hadCredential {
 			if c.Token != "" {
-				if _, err = fmt.Fprintln(a.errOut, "Warning: the server credential was not revoked."); err != nil {
+				if _, err = a.warningf("Warning: the server credential was not revoked.\n"); err != nil {
 					return err
 				}
 			}
-			_, err = fmt.Fprintf(a.out, "Removed profile %q and its local credential.\n", sanitize(name))
+			_, err = a.successf("Removed profile %q and its local credential.\n", sanitize(name))
 		} else {
-			_, err = fmt.Fprintf(a.out, "Removed profile %q.\n", sanitize(name))
+			_, err = a.successf("Removed profile %q.\n", sanitize(name))
 		}
 		if err != nil || !wasCurrent {
 			return err

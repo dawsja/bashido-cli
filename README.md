@@ -24,6 +24,8 @@ bashido script show Deploy
 
 The first credentialless interactive run starts device linking. Profiles allow independent servers and credentials. See [docs/commands.md](docs/commands.md) for every command.
 
+Human-readable output uses color when written to a terminal. Set `NO_COLOR=1` or `TERM=dumb` to disable it; redirected output, JSON, stored script content, notes, and completion scripts never contain color codes.
+
 Upgrade to the latest checksum-verified release without changing local configuration:
 
 ```sh

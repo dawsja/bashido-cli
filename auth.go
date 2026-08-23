@@ -55,7 +55,7 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 		if _, err = cl.do(ctx, "GET", "/api/v1/me", nil, &me, nil); err != nil {
 			return err
 		}
-		fmt.Fprintf(a.out, "Logged in: %s (%s)\n", sanitize(name), sanitize(p.Origin))
+		fmt.Fprintf(a.out, "%s %s (%s)\n", a.paint(a.out, ansiGreen+ansiBold, "Logged in:"), sanitize(name), sanitize(p.Origin))
 		return nil
 	case "logout":
 		f := a.flags("auth logout")
@@ -95,15 +95,15 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 			return err
 		}
 		if revoked {
-			_, err = fmt.Fprintf(a.out, "Logged out of profile %q and revoked its credential.\n", sanitize(name))
+			_, err = a.successf("Logged out of profile %q and revoked its credential.\n", sanitize(name))
 			return err
 		}
 		if c.Token != "" {
-			if _, err = fmt.Fprintln(a.errOut, "Warning: the server credential was not revoked."); err != nil {
+			if _, err = a.warningf("Warning: the server credential was not revoked.\n"); err != nil {
 				return err
 			}
 		}
-		_, err = fmt.Fprintf(a.out, "Removed the local credential for profile %q.\n", sanitize(name))
+		_, err = a.successf("Removed the local credential for profile %q.\n", sanitize(name))
 		return err
 	default:
 		return fail(2, "unknown auth command %q", args[0])
@@ -149,7 +149,7 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 		return errors.New("device authorization response has an invalid user code")
 	}
 	link := p.Origin + "/link"
-	fmt.Fprintf(a.errOut, "Open %s and enter code %s\n", link, sanitize(dc.UserCode))
+	fmt.Fprintf(a.errOut, "Open %s and enter code %s\n", a.paint(a.errOut, ansiCyan, link), a.paint(a.errOut, ansiBold, sanitize(dc.UserCode)))
 	if !*noBrowser && dc.VerificationURIComplete != "" {
 		if u, e := url.Parse(dc.VerificationURIComplete); e == nil && u.Scheme+"://"+u.Host == p.Origin {
 			_ = exec.CommandContext(ctx, "xdg-open", dc.VerificationURIComplete).Start()
@@ -168,7 +168,7 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 	if err = saveCredentials(dir, creds); err != nil {
 		return err
 	}
-	if _, err = fmt.Fprintf(a.out, "Logged in to %s as profile %q.\n", sanitize(p.Origin), sanitize(name)); err != nil {
+	if _, err = a.successf("Logged in to %s as profile %q.\n", sanitize(p.Origin), sanitize(name)); err != nil {
 		return err
 	}
 	if !cfg.CompletionOffered {
