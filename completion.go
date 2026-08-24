@@ -25,15 +25,20 @@ const bashCompletionSource = "source <(bashido completion bash)"
 
 const bashCompletion = `_bashido() {
   local cur prev top sub candidate state word option value
-  local i positional=0 skip=0
+  local i positional=0 skip=0 start=1
   COMPREPLY=()
   cur=${COMP_WORDS[COMP_CWORD]}
   prev=${COMP_WORDS[COMP_CWORD-1]-}
-  top=${COMP_WORDS[1]-}
-  sub=${COMP_WORDS[2]-}
+  if [[ ${COMP_WORDS[1]} == --profile ]]; then
+    start=3
+  elif [[ ${COMP_WORDS[1]} == --profile=* ]]; then
+    start=2
+  fi
+  top=${COMP_WORDS[start]-}
+  sub=${COMP_WORDS[start+1]-}
 
-  if (( COMP_CWORD == 1 )); then
-    COMPREPLY=( $(compgen -W 'auth profile script note completion uninstall upgrade version --help -h' -- "$cur") )
+  if (( COMP_CWORD == start )); then
+    COMPREPLY=( $(compgen -W 'auth profile script note completion uninstall upgrade version help --help -h --profile' -- "$cur") )
     return
   fi
 
@@ -46,16 +51,22 @@ const bashCompletion = `_bashido() {
     --title)
       return
       ;;
+    --profile)
+      while IFS= read -r candidate; do
+        [[ $candidate == "$cur"* ]] && COMPREPLY+=("$candidate")
+      done < <("${COMP_WORDS[0]}" __complete profiles 2>/dev/null)
+      return
+      ;;
   esac
 
-  if (( COMP_CWORD == 2 )); then
+  if (( COMP_CWORD == start+1 )); then
     case "$top" in
       auth) COMPREPLY=( $(compgen -W 'login status logout' -- "$cur") ) ;;
       profile) COMPREPLY=( $(compgen -W 'list add use remove' -- "$cur") ) ;;
       script) COMPREPLY=( $(compgen -W 'list search show create update edit delete restore purge' -- "$cur") ) ;;
       note) COMPREPLY=( $(compgen -W 'show set edit clear' -- "$cur") ) ;;
       completion) COMPREPLY=( $(compgen -W 'bash install' -- "$cur") ) ;;
-      uninstall) COMPREPLY=( $(compgen -W '--local-only --yes --help -h' -- "$cur") ) ;;
+      uninstall) COMPREPLY=( $(compgen -W '--local-only --yes --help -h --profile' -- "$cur") ) ;;
     esac
     return
   fi
@@ -68,6 +79,14 @@ const bashCompletion = `_bashido() {
       while IFS= read -r candidate; do COMPREPLY+=("$option=$candidate"); done < <(compgen -f -- "$value")
       return
       ;;
+    --profile=*)
+      option=${cur%%=*}
+      value=${cur#*=}
+      while IFS= read -r candidate; do
+        [[ $candidate == "$value"* ]] && COMPREPLY+=("$option=$candidate")
+      done < <("${COMP_WORDS[0]}" __complete profiles 2>/dev/null)
+      return
+      ;;
     --title=*)
       return
       ;;
@@ -75,33 +94,33 @@ const bashCompletion = `_bashido() {
 
   if [[ $cur == -* ]]; then
     if [[ $top == uninstall ]]; then
-      COMPREPLY=( $(compgen -W '--local-only --yes --help -h' -- "$cur") )
+      COMPREPLY=( $(compgen -W '--local-only --yes --help -h --profile' -- "$cur") )
       return
     fi
     case "$top:$sub" in
-      auth:login) COMPREPLY=( $(compgen -W '--no-browser --replace --help -h' -- "$cur") ) ;;
-      auth:logout) COMPREPLY=( $(compgen -W '--local-only --help -h' -- "$cur") ) ;;
-      profile:add) COMPREPLY=( $(compgen -W '--ca-file --use --help -h' -- "$cur") ) ;;
-      profile:remove) COMPREPLY=( $(compgen -W '--local-only --yes --help -h' -- "$cur") ) ;;
-      script:list|script:search) COMPREPLY=( $(compgen -W '--trash --all --json --help -h' -- "$cur") ) ;;
-      script:show|note:show) COMPREPLY=( $(compgen -W '--json --help -h' -- "$cur") ) ;;
-      script:create) COMPREPLY=( $(compgen -W '--title --notes-file --help -h' -- "$cur") ) ;;
-      script:update) COMPREPLY=( $(compgen -W '--title --force --help -h' -- "$cur") ) ;;
-      script:edit|note:edit) COMPREPLY=( $(compgen -W '--force --help -h' -- "$cur") ) ;;
-      script:delete|script:restore) COMPREPLY=( $(compgen -W '--help -h' -- "$cur") ) ;;
-      script:purge|note:clear) COMPREPLY=( $(compgen -W '--yes --help -h' -- "$cur") ) ;;
+      auth:login) COMPREPLY=( $(compgen -W '--no-browser --replace --help -h --profile' -- "$cur") ) ;;
+      auth:logout) COMPREPLY=( $(compgen -W '--local-only --help -h --profile' -- "$cur") ) ;;
+      profile:add) COMPREPLY=( $(compgen -W '--ca-file --use --help -h --profile' -- "$cur") ) ;;
+      profile:remove) COMPREPLY=( $(compgen -W '--local-only --yes --help -h --profile' -- "$cur") ) ;;
+      script:list|script:search) COMPREPLY=( $(compgen -W '--trash --all --json --help -h --profile' -- "$cur") ) ;;
+      script:show|note:show) COMPREPLY=( $(compgen -W '--json --help -h --profile' -- "$cur") ) ;;
+      script:create) COMPREPLY=( $(compgen -W '--title --notes-file --help -h --profile' -- "$cur") ) ;;
+      script:update) COMPREPLY=( $(compgen -W '--title --force --help -h --profile' -- "$cur") ) ;;
+      script:edit|note:edit) COMPREPLY=( $(compgen -W '--force --help -h --profile' -- "$cur") ) ;;
+      script:delete|script:restore) COMPREPLY=( $(compgen -W '--help -h --profile' -- "$cur") ) ;;
+      script:purge|note:clear) COMPREPLY=( $(compgen -W '--yes --help -h --profile' -- "$cur") ) ;;
     esac
     return
   fi
 
-  for ((i = 3; i < COMP_CWORD; i++)); do
+  for ((i = start+2; i < COMP_CWORD; i++)); do
     word=${COMP_WORDS[i]}
     if (( skip )); then
       skip=0
       continue
     fi
     case "$word" in
-      --title|--notes-file|--ca-file) skip=1 ;;
+      --title|--notes-file|--ca-file|--profile) skip=1 ;;
       -*) ;;
       *) ((positional += 1)) ;;
     esac
@@ -142,6 +161,9 @@ complete -F _bashido bashido
 `
 
 func (a *app) completionCommand(args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("completion")
+	}
 	if len(args) != 1 {
 		return fail(2, "usage: bashido completion bash|install")
 	}
@@ -269,6 +291,80 @@ func (a *app) installBashCompletion() error {
 	}
 	_, err = a.successf("Enabled Bash completion in %s; open a new shell to use it.\n", sanitize(path))
 	return err
+}
+
+func (a *app) removeBashCompletion() (string, bool, error) {
+	home := a.getenv("HOME")
+	if home == "" {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil {
+			return "", false, err
+		}
+	}
+	path := filepath.Join(home, ".bashrc")
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return path, false, nil
+	}
+	if err != nil {
+		return path, false, fmt.Errorf("inspect %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return path, false, fmt.Errorf("refusing to modify non-regular file %s", path)
+	}
+	if info.Size() > maxBashRCSize {
+		return path, false, fmt.Errorf("refusing to read %s: file exceeds size limit", path)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return path, false, fmt.Errorf("read %s: %w", path, err)
+	}
+	var kept []string
+	changed := false
+	for _, line := range strings.Split(string(content), "\n") {
+		trim := strings.TrimSpace(line)
+		if trim == bashCompletionSource || trim == "# Bashido tab completion" {
+			changed = true
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if !changed {
+		return path, false, nil
+	}
+	for len(kept) > 0 && kept[len(kept)-1] == "" {
+		kept = kept[:len(kept)-1]
+	}
+	next := []byte(strings.Join(kept, "\n"))
+	if len(next) > 0 {
+		next = append(next, '\n')
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".bashrc-")
+	if err != nil {
+		return path, false, err
+	}
+	tmpName := tmp.Name()
+	if err = tmp.Chmod(info.Mode().Perm()); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return path, false, err
+	}
+	if _, err = tmp.Write(next); err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(tmpName)
+		return path, false, err
+	}
+	if err = os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return path, false, err
+	}
+	return path, true, nil
 }
 
 func openBashRC(path string) (*os.File, []byte, error) {

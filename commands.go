@@ -9,26 +9,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/tabwriter"
 )
-
-const shortHelp = `Usage: bashido <command>
-
-Commands:
-  auth       Log in, log out, and inspect authentication
-  profile    Manage named server profiles
-  script     List, search, create, edit, and remove scripts
-  note       Show, set, edit, and clear script notes
-  completion Generate shell completion
-  uninstall Revoke credentials and remove bashido
-  upgrade   Install the latest bashido release
-  version    Print the version
-
-Run 'bashido <command> --help' for command details.`
 
 func (a *app) flags(name string) *flag.FlagSet {
 	f := flag.NewFlagSet(name, flag.ContinueOnError)
 	f.SetOutput(a.errOut)
-	f.Usage = func() { fmt.Fprintln(a.errOut, a.help(a.errOut)) }
+	f.Usage = func() { fmt.Fprintln(a.out, a.colorHelp(a.out, helpFor(name))) }
 	return f
 }
 
@@ -55,15 +42,25 @@ func optionsFirst(args []string, values map[string]bool) []string {
 }
 
 func (a *app) run(ctx context.Context, args []string) error {
+	profile, args, err := extractProfile(args)
+	if err != nil {
+		return err
+	}
+	a.profileName = profile
 	if len(args) == 0 {
 		cfg, creds, dir, err := a.load()
 		if err != nil {
 			return err
 		}
-		name, p, err := active(cfg)
+		name, p, err := a.active(cfg)
 		if err != nil {
-			fmt.Fprintln(a.errOut, a.help(a.errOut))
-			return nil
+			if cfg.Current == "" && a.profileName == "" && len(cfg.Profiles) == 0 {
+				fmt.Fprintln(a.errOut, "No server profile yet.")
+				fmt.Fprintln(a.errOut, "  bashido profile add NAME URL --use")
+				fmt.Fprintln(a.errOut, "  bashido auth login")
+				return nil
+			}
+			return err
 		}
 		if c, ok := creds.Profiles[name]; !ok || c.Token == "" || c.Origin != p.Origin {
 			return a.authLogin(ctx, nil)
@@ -78,11 +75,13 @@ func (a *app) run(ctx context.Context, args []string) error {
 		return nil
 	}
 	if args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
-		fmt.Fprintln(a.out, a.help(a.out))
-		return nil
+		return a.helpCommand(args[1:])
 	}
 	switch args[0] {
 	case "version":
+		if hasHelp(args[1:]) {
+			return a.printHelp("version")
+		}
 		if len(args) != 1 {
 			return fail(2, "version takes no arguments")
 		}
@@ -113,12 +112,18 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fail(2, "usage: bashido profile list|add|use|remove")
 	}
+	if isHelp(args[0]) {
+		return a.printHelp("profile")
+	}
 	cfg, creds, dir, err := a.load()
 	if err != nil {
 		return err
 	}
 	switch args[0] {
 	case "list":
+		if hasHelp(args[1:]) {
+			return a.printHelp("profile list")
+		}
 		if len(args) != 1 {
 			return fail(2, "profile list takes no arguments")
 		}
@@ -127,15 +132,28 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 			names = append(names, n)
 		}
 		sort.Strings(names)
+		if len(names) == 0 {
+			_, err = fmt.Fprintln(a.out, "No profiles.")
+			return err
+		}
+		w := tabwriter.NewWriter(a.out, 0, 4, 2, ' ', tabwriter.StripEscape)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", "", a.tablePaint(a.out, ansiBold, "NAME"), a.tablePaint(a.out, ansiBold, "SERVER"), a.tablePaint(a.out, ansiBold, "LOGGED IN"))
 		for _, n := range names {
 			mark := " "
 			if n == cfg.Current {
 				mark = a.paint(a.out, ansiGreen+ansiBold, "*")
 			}
-			fmt.Fprintf(a.out, "%s %-16s %s\n", mark, sanitize(n), sanitize(cfg.Profiles[n].Origin))
+			logged, loggedColor := "no", ansiDim
+			if c, ok := creds.Profiles[n]; ok && c.Token != "" && c.Origin == cfg.Profiles[n].Origin {
+				logged, loggedColor = "yes", ansiGreen
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", mark, sanitize(n), sanitize(cfg.Profiles[n].Origin), a.tablePaint(a.out, loggedColor, logged))
 		}
-		return nil
+		return w.Flush()
 	case "add":
+		if hasHelp(args[1:]) {
+			return a.printHelp("profile add")
+		}
 		f := a.flags("profile add")
 		ca := f.String("ca-file", "", "custom CA PEM file")
 		use := f.Bool("use", false, "make current")
@@ -201,6 +219,9 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		}
 		return err
 	case "use":
+		if hasHelp(args[1:]) {
+			return a.printHelp("profile use")
+		}
 		if len(args) != 2 {
 			return fail(2, "usage: bashido profile use NAME")
 		}
@@ -218,6 +239,9 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		_, err = a.successf("Now using profile %q.\n", sanitize(args[1]))
 		return err
 	case "remove":
+		if hasHelp(args[1:]) {
+			return a.printHelp("profile remove")
+		}
 		f := a.flags("profile remove")
 		local := f.Bool("local-only", false, "do not revoke remotely")
 		yes := f.Bool("yes", false, "confirm removal")
@@ -254,14 +278,6 @@ func (a *app) profileCommand(ctx context.Context, args []string) error {
 		delete(creds.Profiles, name)
 		if cfg.Current == name {
 			cfg.Current = ""
-			names := make([]string, 0, len(cfg.Profiles))
-			for n := range cfg.Profiles {
-				names = append(names, n)
-			}
-			sort.Strings(names)
-			if len(names) > 0 {
-				cfg.Current = names[0]
-			}
 		}
 		if err := saveCredentials(dir, creds); err != nil {
 			return err

@@ -32,10 +32,16 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fail(2, "usage: bashido auth login|status|logout")
 	}
+	if isHelp(args[0]) {
+		return a.printHelp("auth")
+	}
 	switch args[0] {
 	case "login":
 		return a.authLogin(ctx, args[1:])
 	case "status":
+		if hasHelp(args[1:]) {
+			return a.printHelp("auth status")
+		}
 		if len(args) != 1 {
 			return fail(2, "auth status takes no arguments")
 		}
@@ -43,7 +49,7 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		name, p, token, err := bearer(cfg, creds)
+		name, p, token, err := a.bearer(cfg, creds)
 		if err != nil {
 			return err
 		}
@@ -56,8 +62,14 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 			return err
 		}
 		fmt.Fprintf(a.out, "%s %s (%s)\n", a.paint(a.out, ansiGreen+ansiBold, "Logged in:"), sanitize(name), sanitize(p.Origin))
+		if identity := meIdentity(me); identity != "" {
+			fmt.Fprintf(a.out, "%s   %s\n", a.paint(a.out, ansiBold, "Account:"), sanitize(identity))
+		}
 		return nil
 	case "logout":
+		if hasHelp(args[1:]) {
+			return a.printHelp("auth logout")
+		}
 		f := a.flags("auth logout")
 		local := f.Bool("local-only", false, "do not revoke remotely")
 		if err := f.Parse(optionsFirst(args[1:], nil)); err != nil {
@@ -70,7 +82,7 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		name, p, err := active(cfg)
+		name, p, err := a.active(cfg)
 		if err != nil {
 			return err
 		}
@@ -111,6 +123,9 @@ func (a *app) authCommand(ctx context.Context, args []string) error {
 }
 
 func (a *app) authLogin(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("auth login")
+	}
 	f := a.flags("auth login")
 	noBrowser := f.Bool("no-browser", false, "do not open browser")
 	replace := f.Bool("replace", false, "replace existing credential")
@@ -124,7 +139,7 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	name, p, err := active(cfg)
+	name, p, err := a.active(cfg)
 	if err != nil {
 		return err
 	}
@@ -149,7 +164,8 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 		return errors.New("device authorization response has an invalid user code")
 	}
 	link := p.Origin + "/link"
-	fmt.Fprintf(a.errOut, "Open %s and enter code %s\n", a.paint(a.errOut, ansiCyan, link), a.paint(a.errOut, ansiBold, sanitize(dc.UserCode)))
+	fmt.Fprintf(a.errOut, "Open  %s\nEnter %s\n\n", a.paint(a.errOut, ansiCyan, link), a.paint(a.errOut, ansiBold, formatUserCode(sanitize(dc.UserCode))))
+	fmt.Fprintln(a.errOut, a.paint(a.errOut, ansiDim, "Waiting for authorization..."))
 	if !*noBrowser && dc.VerificationURIComplete != "" {
 		if u, e := url.Parse(dc.VerificationURIComplete); e == nil && u.Scheme+"://"+u.Host == p.Origin {
 			_ = exec.CommandContext(ctx, "xdg-open", dc.VerificationURIComplete).Start()
@@ -175,6 +191,27 @@ func (a *app) authLogin(ctx context.Context, args []string) error {
 		return a.offerBashCompletion(dir)
 	}
 	return nil
+}
+
+func formatUserCode(code string) string {
+	if len(code) == 6 {
+		return code[:3] + " " + code[3:]
+	}
+	return code
+}
+
+func meIdentity(me map[string]any) string {
+	for _, key := range []string{"email", "username", "login", "name"} {
+		v, ok := me[key].(string)
+		if !ok {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func safeDeviceName(value string) string {

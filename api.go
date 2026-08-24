@@ -145,6 +145,29 @@ func bearer(cfg *config, creds *credentials) (string, profile, string, error) {
 	if err != nil {
 		return "", profile{}, "", err
 	}
+	return credentialFor(name, p, creds)
+}
+
+func (a *app) active(cfg *config) (string, profile, error) {
+	if a.profileName == "" {
+		return active(cfg)
+	}
+	p, ok := cfg.Profiles[a.profileName]
+	if !ok {
+		return "", profile{}, fail(2, "profile %q does not exist", a.profileName)
+	}
+	return a.profileName, p, nil
+}
+
+func (a *app) bearer(cfg *config, creds *credentials) (string, profile, string, error) {
+	name, p, err := a.active(cfg)
+	if err != nil {
+		return "", profile{}, "", err
+	}
+	return credentialFor(name, p, creds)
+}
+
+func credentialFor(name string, p profile, creds *credentials) (string, profile, string, error) {
 	c, ok := creds.Profiles[name]
 	if !ok || c.Token == "" {
 		return name, p, "", fail(3, "not logged in for profile %q; run 'bashido auth login'", name)

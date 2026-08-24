@@ -119,6 +119,9 @@ func (a *app) editValue(ctx context.Context, initial, suffix string) (string, st
 }
 
 func (a *app) editScript(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("script edit")
+	}
 	f := a.flags("script edit")
 	force := f.Bool("force", false, "omit revision check")
 	if err := f.Parse(optionsFirst(args, nil)); err != nil {
@@ -161,6 +164,15 @@ func (a *app) editScript(ctx context.Context, args []string) error {
 func (a *app) noteCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fail(2, "usage: bashido note show|set|edit|clear")
+	}
+	if isHelp(args[0]) {
+		return a.printHelp("note")
+	}
+	if hasHelp(args[1:]) {
+		key := "note " + args[0]
+		if _, ok := commandHelp[key]; ok {
+			return a.printHelp(key)
+		}
 	}
 	cl, err := a.api()
 	if err != nil {

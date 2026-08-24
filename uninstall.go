@@ -12,6 +12,9 @@ import (
 )
 
 func (a *app) uninstall(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("uninstall")
+	}
 	f := a.flags("uninstall")
 	local := f.Bool("local-only", false, "do not revoke credentials remotely")
 	yes := f.Bool("yes", false, "confirm uninstallation")
@@ -81,10 +84,17 @@ func (a *app) uninstall(ctx context.Context, args []string) error {
 		return fmt.Errorf("remove executable %s: %w", executable, err)
 	}
 
+	completionPath, completionRemoved, completionErr := a.removeBashCompletion()
+
 	if *local {
 		a.warningf("Warning: server credentials were not revoked.\n")
 	} else {
 		a.successf("Revoked %d credential(s).\n", revoked)
+	}
+	if completionErr != nil {
+		a.warningf("Warning: could not remove Bash completion: %s\n", sanitize(completionErr.Error()))
+	} else if completionRemoved {
+		a.successf("Removed Bash completion from %s.\n", sanitize(completionPath))
 	}
 	a.successf("Removed %s.\n", executable)
 	return nil

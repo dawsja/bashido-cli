@@ -23,6 +23,9 @@ import (
 const defaultReleaseBase = "https://github.com/dawsja/bashido-cli/releases/latest/download"
 
 func (a *app) upgrade(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("upgrade")
+	}
 	if len(args) != 0 {
 		return fail(2, "upgrade takes no arguments")
 	}
@@ -39,6 +42,7 @@ func (a *app) upgrade(ctx context.Context, args []string) error {
 	}
 	asset := "bashido-linux-" + runtime.GOARCH
 
+	fmt.Fprintln(a.errOut, a.paint(a.errOut, ansiDim, "Downloading..."))
 	var checksums bytes.Buffer
 	if err = downloadRelease(ctx, base+"/checksums.txt", &checksums, 1<<20); err != nil {
 		return fmt.Errorf("download checksums: %w", err)
@@ -64,6 +68,7 @@ func (a *app) upgrade(ctx context.Context, args []string) error {
 	if err = downloadRelease(ctx, base+"/"+asset, io.MultiWriter(tmp, hash), 128<<20); err != nil {
 		return fmt.Errorf("download release: %w", err)
 	}
+	fmt.Fprintln(a.errOut, a.paint(a.errOut, ansiDim, "Verifying..."))
 	if !bytes.Equal(hash.Sum(nil), expected) {
 		return errors.New("release checksum mismatch")
 	}

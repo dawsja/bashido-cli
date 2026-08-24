@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -44,7 +45,7 @@ func (a *app) api() (*client, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, p, t, err := bearer(cfg, creds)
+	_, p, t, err := a.bearer(cfg, creds)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +72,9 @@ func (a *app) scriptCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fail(2, "usage: bashido script list|search|show|create|update|edit|delete|restore|purge")
 	}
+	if isHelp(args[0]) {
+		return a.printHelp("script")
+	}
 	switch args[0] {
 	case "list", "search":
 		return a.listScripts(ctx, args[0], args[1:])
@@ -90,6 +94,9 @@ func (a *app) scriptCommand(ctx context.Context, args []string) error {
 }
 
 func (a *app) listScripts(ctx context.Context, cmd string, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("script " + cmd)
+	}
 	f := a.flags("script " + cmd)
 	trash, all := stateFlags(f)
 	asJSON := f.Bool("json", false, "JSON output")
@@ -122,8 +129,24 @@ func (a *app) listScripts(ctx context.Context, cmd string, args []string) error 
 	if *asJSON {
 		return writeJSON(a.out, rows)
 	}
+	if len(rows) == 0 {
+		switch {
+		case state == "trash":
+			_, err = fmt.Fprintln(a.out, "Trash is empty.")
+		case query != "":
+			_, err = fmt.Fprintln(a.out, "No matching scripts.")
+		default:
+			_, err = fmt.Fprintln(a.out, "No scripts.")
+		}
+		return err
+	}
+	showState := state != "active"
 	w := tabwriter.NewWriter(a.out, 0, 4, 2, ' ', tabwriter.StripEscape)
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.tablePaint(a.out, ansiBold, "ID"), a.tablePaint(a.out, ansiBold, "TITLE"), a.tablePaint(a.out, ansiBold, "UPDATED"), a.tablePaint(a.out, ansiBold, "STATE"))
+	if showState {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.tablePaint(a.out, ansiBold, "ID"), a.tablePaint(a.out, ansiBold, "TITLE"), a.tablePaint(a.out, ansiBold, "UPDATED"), a.tablePaint(a.out, ansiBold, "STATE"))
+	} else {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", a.tablePaint(a.out, ansiBold, "ID"), a.tablePaint(a.out, ansiBold, "TITLE"), a.tablePaint(a.out, ansiBold, "UPDATED"))
+	}
 	for _, s := range rows {
 		st := "active"
 		if s.DeletedAt != nil {
@@ -133,12 +156,19 @@ func (a *app) listScripts(ctx context.Context, cmd string, args []string) error 
 		if st == "trash" {
 			stateColor = ansiRed
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.tablePaint(a.out, ansiCyan, sanitize(s.ID)), sanitize(s.Title), a.tablePaint(a.out, ansiDim, formatMillis(s.UpdatedAt)), a.tablePaint(a.out, stateColor, st))
+		if showState {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", a.tablePaint(a.out, ansiCyan, sanitize(s.ID)), sanitize(s.Title), a.tablePaint(a.out, ansiDim, formatMillis(s.UpdatedAt)), a.tablePaint(a.out, stateColor, st))
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%s\n", a.tablePaint(a.out, ansiCyan, sanitize(s.ID)), sanitize(s.Title), a.tablePaint(a.out, ansiDim, formatMillis(s.UpdatedAt)))
+		}
 	}
 	return w.Flush()
 }
 
 func (a *app) showScript(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("script show")
+	}
 	f := a.flags("script show")
 	asJSON := f.Bool("json", false, "JSON output")
 	if err := f.Parse(optionsFirst(args, nil)); err != nil {
@@ -157,6 +187,9 @@ func (a *app) showScript(ctx context.Context, args []string) error {
 	}
 	if *asJSON {
 		return writeJSON(a.out, s)
+	}
+	if a.writerIsTTY(a.errOut) {
+		fmt.Fprintln(a.errOut, a.paint(a.errOut, ansiDim, fmt.Sprintf("%s  %s  updated %s", sanitize(s.Title), sanitize(s.ID), formatMillis(s.UpdatedAt))))
 	}
 	_, err = io.WriteString(a.out, s.Content)
 	return err
@@ -180,14 +213,20 @@ func readInput(in io.Reader, path string) (string, error) {
 }
 
 func (a *app) createScript(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("script create")
+	}
 	f := a.flags("script create")
 	title := f.String("title", "", "script title")
 	notesFile := f.String("notes-file", "", "notes file")
 	if err := f.Parse(optionsFirst(args, map[string]bool{"--title": true, "--notes-file": true})); err != nil {
 		return fail(2, "%v", err)
 	}
+	if f.NArg() == 1 && *title == "" && f.Arg(0) != "-" {
+		*title = filepath.Base(f.Arg(0))
+	}
 	if f.NArg() != 1 || *title == "" {
-		return fail(2, "usage: bashido script create FILE|- --title TITLE [--notes-file FILE]")
+		return fail(2, "usage: bashido script create FILE|- [--title TITLE] [--notes-file FILE]")
 	}
 	content, err := readInput(a.in, f.Arg(0))
 	if err != nil {
@@ -220,6 +259,9 @@ func (a *app) createScript(ctx context.Context, args []string) error {
 }
 
 func (a *app) updateScript(ctx context.Context, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("script update")
+	}
 	f := a.flags("script update")
 	title := f.String("title", "", "new title")
 	force := f.Bool("force", false, "omit revision check")
@@ -264,6 +306,9 @@ func (a *app) updateScript(ctx context.Context, args []string) error {
 }
 
 func (a *app) mutateScript(ctx context.Context, cmd string, args []string) error {
+	if hasHelp(args) {
+		return a.printHelp("script " + cmd)
+	}
 	f := a.flags("script " + cmd)
 	yes := f.Bool("yes", false, "confirm permanent deletion")
 	if err := f.Parse(optionsFirst(args, nil)); err != nil {
@@ -285,20 +330,23 @@ func (a *app) mutateScript(ctx context.Context, cmd string, args []string) error
 	}
 	path := "/api/v1/scripts/" + url.PathEscape(s.ID)
 	method := "DELETE"
-	action := "Deleted"
+	action := "Moved"
+	suffix := " to trash"
 	if cmd == "restore" {
 		method = "POST"
 		path += "/restore"
 		action = "Restored"
+		suffix = ""
 	}
 	if cmd == "purge" {
 		path += "/permanent"
 		action = "Permanently deleted"
+		suffix = ""
 	}
 	if _, err = cl.do(ctx, method, path, nil, nil, nil); err != nil {
 		return err
 	}
-	_, err = a.successf("%s script %q (%s).\n", action, sanitize(s.Title), sanitize(s.ID))
+	_, err = a.successf("%s script %q (%s)%s.\n", action, sanitize(s.Title), sanitize(s.ID), suffix)
 	return err
 }
 

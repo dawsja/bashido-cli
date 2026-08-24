@@ -33,8 +33,10 @@ type app struct {
 	getenv        func(string) string
 	isInteractive func() bool
 	useColor      func(io.Writer) bool
+	isTTY         func(io.Writer) bool
 	executable    func() (string, error)
 	releaseBase   string
+	profileName   string
 }
 
 func main() {

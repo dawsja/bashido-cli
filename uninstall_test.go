@@ -120,6 +120,42 @@ func TestUninstallLocalOnly(t *testing.T) {
 	}
 }
 
+func TestUninstallRemovesBashCompletion(t *testing.T) {
+	a, out, _ := testApp(t)
+	executable := installTestExecutable(t, a)
+	home := t.TempDir()
+	bashrc := filepath.Join(home, ".bashrc")
+	if err := os.WriteFile(bashrc, []byte("export TEST=1\n\n# Bashido tab completion\n"+bashCompletionSource+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	getenv := a.getenv
+	a.getenv = func(key string) string {
+		if key == "HOME" {
+			return home
+		}
+		return getenv(key)
+	}
+	if err := a.run(t.Context(), []string{"uninstall", "--local-only", "--yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(executable); !os.IsNotExist(err) {
+		t.Fatalf("executable still exists: %v", err)
+	}
+	content, err := os.ReadFile(bashrc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), bashCompletionSource) || strings.Contains(string(content), "Bashido tab completion") {
+		t.Fatalf(".bashrc = %q", content)
+	}
+	if !strings.Contains(string(content), "export TEST=1") {
+		t.Fatalf("user bashrc content lost: %q", content)
+	}
+	if !strings.Contains(out.String(), "Removed Bash completion from "+bashrc) {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
 func TestUninstallRequiresConfirmation(t *testing.T) {
 	a, _, _ := testApp(t)
 	if err := a.run(t.Context(), []string{"uninstall"}); err == nil || !strings.Contains(err.Error(), "requires --yes") {

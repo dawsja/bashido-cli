@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -162,7 +163,7 @@ func TestScriptMutationAcknowledgements(t *testing.T) {
 		path    string
 		want    string
 	}{
-		{command: "delete", method: "DELETE", path: "/api/v1/scripts/" + id, want: "Deleted script \"Test\" (" + id + ").\n"},
+		{command: "delete", method: "DELETE", path: "/api/v1/scripts/" + id, want: "Moved script \"Test\" (" + id + ") to trash.\n"},
 		{command: "restore", method: "POST", path: "/api/v1/scripts/" + id + "/restore", want: "Restored script \"Test\" (" + id + ").\n"},
 		{command: "purge", method: "DELETE", path: "/api/v1/scripts/" + id + "/permanent", want: "Permanently deleted script \"Test\" (" + id + ").\n"},
 	} {
@@ -402,6 +403,218 @@ func TestLogoutAcknowledgements(t *testing.T) {
 	})
 }
 
+func TestHelpCommands(t *testing.T) {
+	a, out, _ := testApp(t)
+	for _, args := range [][]string{
+		{"--help"},
+		{"help"},
+		{"help", "script"},
+		{"script", "--help"},
+		{"help", "script", "list"},
+		{"script", "list", "--help"},
+		{"note", "--help"},
+		{"note", "show", "--help"},
+		{"version", "--help"},
+	} {
+		out.Reset()
+		if err := a.run(t.Context(), args); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if out.Len() == 0 || !bytes.Contains(out.Bytes(), []byte("Usage:")) {
+			t.Fatalf("%v help = %q", args, out.String())
+		}
+	}
+	if err := a.run(t.Context(), []string{"script", "--help"}); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("list")) {
+		t.Fatalf("script help = %q", out.String())
+	}
+}
+
+func TestFirstRunCoach(t *testing.T) {
+	a, out, errOut := testApp(t)
+	if err := a.run(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("stdout = %q", out.String())
+	}
+	if got := errOut.String(); !bytes.Contains([]byte(got), []byte("No server profile yet.")) || !bytes.Contains([]byte(got), []byte("bashido profile add NAME URL --use")) {
+		t.Fatalf("stderr = %q", got)
+	}
+}
+
+func TestListScriptsEmptyAndStateColumn(t *testing.T) {
+	const id = "abcdef1234567890"
+	deleted := int64(1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/scripts" {
+			t.Errorf("unexpected %s", r.URL.String())
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		switch r.URL.Query().Get("state") {
+		case "active":
+			json.NewEncoder(w).Encode(scriptsEnvelope{Scripts: []script{{ID: id, Title: "Deploy", UpdatedAt: 0}}})
+		case "trash":
+			json.NewEncoder(w).Encode(scriptsEnvelope{})
+		case "all":
+			json.NewEncoder(w).Encode(scriptsEnvelope{Scripts: []script{
+				{ID: id, Title: "Deploy"},
+				{ID: "bbbbbbbb22222222", Title: "Old", DeletedAt: &deleted},
+			}})
+		default:
+			t.Errorf("state = %q", r.URL.Query().Get("state"))
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	a, out, _ := testApp(t)
+	configureServer(t, a, ts.URL)
+	if err := a.run(t.Context(), []string{"script", "list"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !bytes.Contains([]byte(got), []byte("TITLE")) || bytes.Contains([]byte(got), []byte("STATE")) {
+		t.Fatalf("active list = %q", got)
+	}
+	out.Reset()
+	if err := a.run(t.Context(), []string{"script", "list", "--all"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !bytes.Contains([]byte(got), []byte("STATE")) || !bytes.Contains([]byte(got), []byte("trash")) {
+		t.Fatalf("all list = %q", got)
+	}
+	out.Reset()
+	if err := a.run(t.Context(), []string{"script", "list", "--trash"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Trash is empty.\n" {
+		t.Fatalf("trash list = %q", got)
+	}
+}
+
+func TestShowScriptTTYMetadata(t *testing.T) {
+	const id = "abcdef1234567890"
+	const raw = "#!/bin/sh\necho hi"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v1/scripts":
+			json.NewEncoder(w).Encode(scriptsEnvelope{Scripts: []script{{ID: id, Title: "Deploy", UpdatedAt: 0}}})
+		case r.URL.Path == "/api/v1/scripts/"+id && r.Method == "GET":
+			json.NewEncoder(w).Encode(scriptEnvelope{Script: script{ID: id, Title: "Deploy", Content: raw}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+	a, out, errOut := testApp(t)
+	a.isTTY = func(io.Writer) bool { return true }
+	configureServer(t, a, ts.URL)
+	if err := a.run(t.Context(), []string{"script", "show", "Deploy"}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != raw {
+		t.Fatalf("stdout = %q", out.String())
+	}
+	if got := errOut.String(); !bytes.Contains([]byte(got), []byte("Deploy")) || !bytes.Contains([]byte(got), []byte(id)) || !bytes.Contains([]byte(got), []byte("updated")) {
+		t.Fatalf("stderr = %q", got)
+	}
+}
+
+func TestCreateTitleDefaultsFromFilename(t *testing.T) {
+	const id = "abcdef1234567890"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if body["title"] != "deploy.sh" {
+			t.Errorf("title = %q", body["title"])
+		}
+		json.NewEncoder(w).Encode(scriptEnvelope{Script: script{ID: id, Title: body["title"]}})
+	}))
+	defer ts.Close()
+	a, out, _ := testApp(t)
+	configureServer(t, a, ts.URL)
+	path := filepath.Join(t.TempDir(), "deploy.sh")
+	if err := os.WriteFile(path, []byte("echo test\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.run(t.Context(), []string{"script", "create", path}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "Created script \"deploy.sh\" ("+id+").\n" {
+		t.Fatalf("output = %q", got)
+	}
+}
+
+func TestAuthStatusShowsAccount(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/me" {
+			t.Errorf("unexpected %s", r.URL.String())
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"email": "ada@example.com"})
+	}))
+	defer ts.Close()
+	a, out, _ := testApp(t)
+	configureServer(t, a, ts.URL)
+	if err := a.run(t.Context(), []string{"auth", "status"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !bytes.Contains([]byte(got), []byte("Logged in:")) || !bytes.Contains([]byte(got), []byte("Account:")) || !bytes.Contains([]byte(got), []byte("ada@example.com")) {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestProfileOverride(t *testing.T) {
+	var hit string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = r.Header.Get("Authorization")
+		json.NewEncoder(w).Encode(scriptsEnvelope{})
+	}))
+	defer ts.Close()
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = r.Header.Get("Authorization")
+		json.NewEncoder(w).Encode(scriptsEnvelope{})
+	}))
+	defer other.Close()
+
+	a, out, _ := testApp(t)
+	configureServer(t, a, ts.URL)
+	cfg, creds, dir, err := a.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Profiles["other"] = profile{Origin: other.URL}
+	creds.Profiles["other"] = credential{Origin: other.URL, Token: "other-token"}
+	if err = saveConfig(dir, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err = saveCredentials(dir, creds); err != nil {
+		t.Fatal(err)
+	}
+	if err = a.run(t.Context(), []string{"--profile", "other", "script", "list"}); err != nil {
+		t.Fatal(err)
+	}
+	if hit != "Bearer other-token" {
+		t.Fatalf("authorization = %q", hit)
+	}
+	if got := out.String(); got != "No scripts.\n" {
+		t.Fatalf("output = %q", got)
+	}
+	saved, _, _, err := a.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Current != "p" {
+		t.Fatalf("current profile changed to %q", saved.Current)
+	}
+}
+
 func TestProfileRemoveAcknowledgements(t *testing.T) {
 	for _, local := range []bool{false, true} {
 		name := "remote"
@@ -441,9 +654,9 @@ func TestProfileRemoveAcknowledgements(t *testing.T) {
 			if revoked == local {
 				t.Fatalf("revoked = %v, local = %v", revoked, local)
 			}
-			want := "Removed profile \"p\" and revoked its credential.\nCurrent profile is now \"z\".\n"
+			want := "Removed profile \"p\" and revoked its credential.\nNo current profile is selected.\n"
 			if local {
-				want = "Removed profile \"p\" and its local credential.\nCurrent profile is now \"z\".\n"
+				want = "Removed profile \"p\" and its local credential.\nNo current profile is selected.\n"
 				if got := errOut.String(); got != "Warning: the server credential was not revoked.\n" {
 					t.Fatalf("stderr = %q", got)
 				}

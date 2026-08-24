@@ -49,7 +49,7 @@ func TestColorOutput(t *testing.T) {
 	if got, want := errOut.String(), "\x1b[33mWarning: unavailable.\x1b[0m\n"; got != want {
 		t.Fatalf("colored warning = %q, want %q", got, want)
 	}
-	if help := a.help(out); !strings.Contains(help, "\x1b[1mUsage:\x1b[0m") || !strings.Contains(help, "\x1b[36mscript\x1b[0m") {
+	if help := a.help(out); !strings.Contains(help, "\x1b[1mUsage:\x1b[0m") || !strings.Contains(help, "\x1b[36mscript\x1b[0m") || !strings.Contains(help, "\x1b[1mLibrary\x1b[0m") {
 		t.Fatalf("colored help missing styles: %q", help)
 	}
 }

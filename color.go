@@ -52,17 +52,49 @@ func (a *app) warningf(format string, args ...any) (int, error) {
 }
 
 func (a *app) help(w io.Writer) string {
+	return a.colorHelp(w, shortHelp)
+}
+
+func (a *app) colorHelp(w io.Writer, text string) string {
 	if !a.colorEnabled(w) {
-		return shortHelp
+		return text
 	}
-	text := strings.Replace(shortHelp, "Usage:", ansiBold+"Usage:"+ansiReset, 1)
-	text = strings.Replace(text, "Commands:", ansiBold+"Commands:"+ansiReset, 1)
-	for _, command := range []string{"auth", "profile", "script", "note", "completion", "uninstall", "upgrade", "version"} {
-		text = strings.Replace(text, "  "+command, "  "+ansiCyan+command+ansiReset, 1)
+	var b strings.Builder
+	for i, line := range strings.Split(text, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		switch {
+		case strings.HasPrefix(line, "Usage:"):
+			b.WriteString(ansiBold + "Usage:" + ansiReset + strings.TrimPrefix(line, "Usage:"))
+		case line == "Commands:" || line == "Flags:" || line == "Library" || line == "Account" || line == "System":
+			b.WriteString(ansiBold + line + ansiReset)
+		case strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   "):
+			rest := line[2:]
+			n := 0
+			for n < len(rest) && rest[n] != ' ' {
+				n++
+			}
+			name := rest[:n]
+			if name != "" && !strings.HasPrefix(name, "-") {
+				b.WriteString("  " + ansiCyan + name + ansiReset + rest[n:])
+			} else {
+				b.WriteString(line)
+			}
+		default:
+			b.WriteString(line)
+		}
 	}
-	return text
+	return b.String()
 }
 
 func terminalColor(w io.Writer, getenv func(string) string) bool {
 	return isTerminal(w) && getenv("NO_COLOR") == "" && getenv("TERM") != "dumb"
+}
+
+func (a *app) writerIsTTY(w io.Writer) bool {
+	if a.isTTY != nil {
+		return a.isTTY(w)
+	}
+	return isTerminal(w)
 }

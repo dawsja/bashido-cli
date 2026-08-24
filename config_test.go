@@ -13,7 +13,7 @@ func testApp(t *testing.T) (*app, *bytes.Buffer, *bytes.Buffer) {
 	executable := filepath.Join(dir, "bin", "bashido")
 	out, errOut := new(bytes.Buffer), new(bytes.Buffer)
 	a := &app{in: bytes.NewReader(nil), out: out, errOut: errOut, getenv: func(k string) string {
-		if k == "XDG_CONFIG_HOME" {
+		if k == "XDG_CONFIG_HOME" || k == "HOME" {
 			return dir
 		}
 		return ""
@@ -70,7 +70,7 @@ func TestProfileAddFlagsAfterArguments(t *testing.T) {
 	if err := a.run(t.Context(), []string{"profile", "list"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := out.String(); got == "" || !bytes.Contains([]byte(got), []byte("work")) {
+	if got := out.String(); !bytes.Contains([]byte(got), []byte("NAME")) || !bytes.Contains([]byte(got), []byte("SERVER")) || !bytes.Contains([]byte(got), []byte("LOGGED IN")) || !bytes.Contains([]byte(got), []byte("work")) {
 		t.Fatalf("profile list = %q", got)
 	}
 	dir, _ := a.configDir()

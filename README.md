@@ -18,7 +18,7 @@ Enable Bash tab completion for the current shell with `source <(bashido completi
 bashido profile add work https://bashido.example.com --use
 bashido auth login
 bashido script list
-bashido script create deploy.sh --title "Deploy"
+bashido script create deploy.sh
 bashido script show Deploy
 ```
 

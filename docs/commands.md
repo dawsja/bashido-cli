@@ -3,7 +3,7 @@
 All command data is written to stdout. Prompts, progress, and errors use stderr. `FILE|-` means a file path or stdin.
 
 ```text
-bashido
+bashido [--profile NAME]
 bashido version
 bashido completion bash
 bashido completion install
@@ -19,7 +19,7 @@ bashido profile remove NAME [--local-only] [--yes]
 bashido script list [--trash|--all] [--json]
 bashido script search QUERY [--trash|--all] [--json]
 bashido script show REF [--json]
-bashido script create FILE|- --title TITLE [--notes-file FILE]
+bashido script create FILE|- [--title TITLE] [--notes-file FILE]
 bashido script update REF [FILE|-] [--title TITLE] [--force]
 bashido script edit REF [--force]
 bashido script delete REF
@@ -30,6 +30,8 @@ bashido note set REF FILE|-
 bashido note edit REF [--force]
 bashido note clear REF --yes
 ```
+
+`--profile NAME` selects a profile for one command without changing the current profile. `bashido <command> --help` and `bashido help <command>` print command details.
 
 ## Bash completion
 
@@ -47,10 +49,10 @@ Completion covers commands, subcommands, flags, profile names, and script refere
 
 `REF` is resolved as a full ID, a unique ID prefix of at least eight characters, then an exact title. Duplicate titles are rejected as ambiguous. There is no fuzzy matching.
 
-`script show` and `note show` emit stored content byte-for-byte unless `--json` is used. Successful state-changing commands acknowledge the action on stdout. Editor commands also report when no changes were made. Updates and editor operations use the current revision; `--force` deliberately omits that check. On an editor conflict, the private recovery file path is reported.
+`script show` and `note show` emit stored content byte-for-byte unless `--json` is used. On a terminal, `script show` writes a dim title, ID, and updated time to stderr. Successful state-changing commands acknowledge the action on stdout. `script delete` moves a script to trash and reports that; `script purge` permanently deletes it. Editor commands also report when no changes were made. Updates and editor operations use the current revision; `--force` deliberately omits that check. On an editor conflict, the private recovery file path is reported. `script create` defaults `--title` to the file name; stdin still requires `--title`.
 
 Script and note acknowledgements include the script title and ID. Profile and authentication acknowledgements include the profile name. Interactive login instructions remain on stderr, while its final success message is written to stdout.
 
 `upgrade` downloads the latest release for the current architecture from GitHub, verifies it against the release's SHA-256 checksums, and atomically replaces the executable. Configuration and credentials are not changed.
 
-Logout, profile removal, and uninstall revoke server credentials before deleting local state. Uninstall revokes credentials for every profile, removes Bashido's configuration files, and removes the running executable. `--local-only` skips remote revocation when the servers are unavailable and prints a warning that the server credential may remain active. Permanent script deletion, note clearing, profile removal, and uninstall require `--yes` where shown.
+Logout, profile removal, and uninstall revoke server credentials before deleting local state. Uninstall revokes credentials for every profile, removes Bashido's configuration files, removes the Bash completion line from a regular `~/.bashrc` when present, and removes the running executable. `--local-only` skips remote revocation when the servers are unavailable and prints a warning that the server credential may remain active. Permanent script deletion, note clearing, profile removal, and uninstall require `--yes` where shown. Removing the current profile leaves no profile selected.

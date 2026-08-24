@@ -189,7 +189,7 @@ func TestLoginFlowSavesOnlyAccessToken(t *testing.T) {
 		t.Fatal("access token not saved")
 	}
 	log := errOut.String()
-	if !strings.Contains(log, origin+"/link") || !strings.Contains(log, "123456") {
+	if !strings.Contains(log, origin+"/link") || !strings.Contains(log, "123 456") || !strings.Contains(log, "Waiting for authorization...") {
 		t.Fatalf("login output = %q", log)
 	}
 	if strings.Contains(log, "private-device-code") || strings.Contains(log, "private-access-token") {
